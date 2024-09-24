@@ -1,4 +1,3 @@
-# Import necessary libraries
 import requests
 import xml.etree.ElementTree as ET
 import pandas as pd
@@ -36,7 +35,7 @@ def fetch_sitemap(url):
         st.error(f"Failed to retrieve sitemap: {response.status_code}")
         return None
 
-# Function to extract URLs and last modified dates from sitemap
+# Function to extract URLs, last modified dates, and images from sitemap
 def parse_sitemap(sitemap):
     urls = []
     for url in sitemap.iter('{http://www.sitemaps.org/schemas/sitemap/0.9}url'):
@@ -46,10 +45,19 @@ def parse_sitemap(sitemap):
             lastmod = lastmod.text
         else:
             lastmod = None  # Handle missing lastmod
-        urls.append({'url': loc, 'lastmod': lastmod})
+
+        # Extract images
+        images = []
+        for image in url.findall('{http://www.google.com/schemas/sitemap-image/1.1}image'):
+            image_loc = image.find('{http://www.google.com/schemas/sitemap-image/1.1}loc').text
+            images.append(image_loc)
+        
+        # Append URL data including the images
+        urls.append({'url': loc, 'lastmod': lastmod, 'images': images})
+    
     return pd.DataFrame(urls)
 
-# Function to extract year, subfolders, domain, and file extensions from URLs
+# Function to extract year, subfolders, domain, and file extensions from URLs, including images
 def extract_url_info(df):
     # Ensure proper datetime conversion with utc=True
     df['lastmod'] = pd.to_datetime(df['lastmod'], errors='coerce', utc=True).dt.tz_localize(None)
@@ -61,7 +69,6 @@ def extract_url_info(df):
     # Handle first subfolder
     def get_first_subfolder(url):
         split_url = urlparse(url).path.strip('/').split('/')
-        # Check if there's at least one folder before the file, otherwise use the file extension
         if len(split_url) > 1 and not os.path.splitext(split_url[-1])[1]:
             return split_url[0]  # Return the first folder
         elif len(split_url) > 1 and os.path.splitext(split_url[-1])[1]:
@@ -85,6 +92,9 @@ def extract_url_info(df):
 
     # Extract domain using urlparse and add it to the DataFrame
     df['domain'] = df['url'].apply(lambda x: urlparse(x).netloc)
+
+    # Keep the images as a separate column
+    df['images'] = df['images'].apply(lambda x: ', '.join(x) if x else 'No images')
 
     return df
 
@@ -139,9 +149,6 @@ def generate_report(sitemap_url):
         duplicate_urls = find_duplicates(df)
         st.session_state['total_duplicates'] = len(duplicate_urls)
 
-        # Display metrics in a row
-        display_metrics(df, nested_sitemaps_count)
-
 # Sidebar filter for first subfolder
 def apply_filters():
     df = st.session_state['df']
@@ -164,11 +171,11 @@ if st.button('Generate Report'):
     else:
         st.error("Please enter a valid sitemap URL")
 
-# If the report has been generated, display the filtered results
+# If the report has been generated, display the filtered results and metrics
 if 'df' in st.session_state:
     df_filtered = apply_filters()
 
-    # Display the metrics after filtering
+    # Display the metrics only once after filtering
     display_metrics(df_filtered, st.session_state['nested_sitemaps_count'])
 
     # Check if there are any valid lastmod values before displaying the "URLs per Year" table
@@ -205,7 +212,6 @@ if 'df' in st.session_state:
         st.bar_chart(timeline_data)
     else:
         st.warning("No 'lastmod' values found in the sitemap.")
-        st.write("Explanation: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nullam quis risus eget urna mollis ornare vel eu leo. Vestibulum id ligula porta felis euismod semper.")
 
     # Display URLs per file extension table
     st.write("\nURLs per File Extension:")
@@ -217,9 +223,11 @@ if 'df' in st.session_state:
     domain_data = df_filtered.groupby('domain').size().reset_index(name='URL Count').sort_values(by='URL Count', ascending=False)
     st.dataframe(domain_data)
 
-    # Display full URL info table
-    st.write("\nFull URL Info Table (URL, Last mod, First folder, Second folder):")
-    full_info_table = df_filtered[['url', 'lastmod', 'first_subfolder', 'second_subfolder']].sort_values(by=['url'])
+    # Display full URL info table including images
+    st.write("\nFull URL Info Table (URL, Last mod, First folder, Second folder, Images):")
+    full_info_table = df_filtered[['url', 'lastmod', 'first_subfolder', 'second_subfolder', 'images']].sort_values(by=['url'])
+
+    # Use Streamlit's table display with images
     st.dataframe(full_info_table)
 
     # Check for duplicates and display duplicate URLs table
