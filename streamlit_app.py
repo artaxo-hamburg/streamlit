@@ -94,14 +94,22 @@ def extract_url_info(df):
     df['domain'] = df['url'].apply(lambda x: urlparse(x).netloc)
 
     # Keep the images as a separate column
-    df['images'] = df['images'].apply(lambda x: ', '.join(x) if x else 'No images')
+    df['images'] = df['images'].apply(lambda x: ', '.join(x) if x else None)
 
     return df
 
-# Function to find and list duplicate URLs
+# Function to find and list duplicate URLs and images
 def find_duplicates(df):
+    # Find duplicate URLs
     duplicate_urls = df[df.duplicated(['url'], keep=False)].sort_values(by=['url'])
-    return duplicate_urls
+
+    # Find duplicate images (images column contains a comma-separated list of images)
+    all_images = df.explode('images')  # Split the images column into individual rows
+    # Ignore "No images" and empty images
+    valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
+    duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
+
+    return duplicate_urls, duplicate_images
 
 # Function to display the metrics
 def display_metrics(df, nested_sitemaps_count):
@@ -140,14 +148,13 @@ def generate_report(sitemap_url):
         st.session_state['df'] = df
         st.session_state['nested_sitemaps_count'] = nested_sitemaps_count
 
-        # Find total URLs and percentage of HTML documents
-        total_urls = len(df)
-        total_html_documents = len(df[df['file_extension'] == 'html'])
-        html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0
-
-        # Find duplicate URLs
-        duplicate_urls = find_duplicates(df)
+        # Find duplicate URLs and images
+        duplicate_urls, duplicate_images = find_duplicates(df)
         st.session_state['total_duplicates'] = len(duplicate_urls)
+
+        # Store duplicates in session state
+        st.session_state['duplicate_urls'] = duplicate_urls
+        st.session_state['duplicate_images'] = duplicate_images
 
 # Sidebar filter for first subfolder
 def apply_filters():
@@ -230,18 +237,20 @@ if 'df' in st.session_state:
     # Use Streamlit's table display with images
     st.dataframe(full_info_table)
 
-    # Check for duplicates and display duplicate URLs table
-    if st.session_state['total_duplicates'] > 0:
-        st.write("Duplicate URLs Found:")
-        duplicate_urls = find_duplicates(df_filtered)
+    # Check for duplicates and display duplicate URLs and images tables
+    if st.session_state['total_duplicates'] > 0 or not st.session_state['duplicate_images'].empty:
+        st.write("Duplicate URLs and Images Found:")
 
-        # Create a table with URL and Referenced Sitemap
-        duplicate_urls_table = pd.DataFrame({
-            'URL': duplicate_urls['url'],
-            'Referenced Sitemap': [sitemap_url] * len(duplicate_urls)  # Assuming all duplicates are from the same sitemap
-        })
+        # Display duplicate URLs
+        if st.session_state['total_duplicates'] > 0:
+            st.write("Duplicate URLs:")
+            duplicate_urls = st.session_state['duplicate_urls']
+            st.dataframe(duplicate_urls[['url']])
 
-        # Use Streamlit's full-width table display
-        st.dataframe(duplicate_urls_table, use_container_width=True)
+        # Display duplicate images
+        if not st.session_state['duplicate_images'].empty:
+            st.write("Duplicate Images:")
+            duplicate_images = st.session_state['duplicate_images']
+            st.dataframe(duplicate_images[['images']])
     else:
-        st.success("No duplicate URLs found.")
+        st.success("No duplicate URLs or images found.")
