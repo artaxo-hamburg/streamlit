@@ -109,7 +109,9 @@ def find_duplicates(df):
     valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
     duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
 
-    return duplicate_urls, duplicate_images
+    total_duplicate_urls_and_images = len(duplicate_urls) + len(duplicate_images)
+    
+    return duplicate_urls, duplicate_images, total_duplicate_urls_and_images
 
 # Function to display the metrics
 def display_metrics(df, nested_sitemaps_count):
@@ -117,11 +119,14 @@ def display_metrics(df, nested_sitemaps_count):
     total_html_documents = len(df[df['file_extension'] == 'html'])
     html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0
 
+    # Calculate the total URLs including images
+    total_urls_with_images = st.session_state.get('total_urls_with_images', 0)
+
     # Display metrics in a row
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label="Total URLs in Sitemap", value=total_urls)
+    col1.metric(label="Total URLs in Sitemap (including images)", value=total_urls_with_images)
     col2.metric(label="Total nested Sitemaps", value=nested_sitemaps_count)
-    col3.metric(label="Total duplicate URLs found", value=st.session_state['total_duplicates'])
+    col3.metric(label="Total duplicate URLs and images found", value=st.session_state['total_duplicates'])
     col4.metric(label="Percentage of HTML documents", value=f"{html_percentage:.2f}%")
 
 # Main function to generate report from sitemap URL
@@ -149,12 +154,16 @@ def generate_report(sitemap_url):
         st.session_state['nested_sitemaps_count'] = nested_sitemaps_count
 
         # Find duplicate URLs and images
-        duplicate_urls, duplicate_images = find_duplicates(df)
-        st.session_state['total_duplicates'] = len(duplicate_urls)
+        duplicate_urls, duplicate_images, total_duplicate_urls_and_images = find_duplicates(df)
+        st.session_state['total_duplicates'] = total_duplicate_urls_and_images
 
         # Store duplicates in session state
         st.session_state['duplicate_urls'] = duplicate_urls
         st.session_state['duplicate_images'] = duplicate_images
+
+        # Count the total URLs, including images
+        total_urls_with_images = len(df) + df['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
+        st.session_state['total_urls_with_images'] = total_urls_with_images
 
 # Sidebar filter for first subfolder
 def apply_filters():
