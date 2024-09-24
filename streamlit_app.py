@@ -113,20 +113,35 @@ def find_duplicates(df):
     
     return duplicate_urls, duplicate_images, total_duplicate_urls_and_images
 
-# Function to display the metrics
-def display_metrics(df, nested_sitemaps_count):
-    total_urls = len(df)
-    total_html_documents = len(df[df['file_extension'] == 'html'])
-    html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0
+# Function to display the metrics, dynamically adjusted based on filtered data
+def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
+    total_urls = len(df_filtered)
+    
+    # Case when the user selects "HTML"
+    if file_type_filter == 'HTML':
+        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+        total_urls_with_images = total_html_documents
+        html_percentage = 100.0 if total_html_documents > 0 else 0.0
+    # Case when the user selects "Images"
+    elif file_type_filter == 'Images':
+        total_image_urls = len(df_filtered[df_filtered['images'].notna() & (df_filtered['images'] != '')])
+        total_urls_with_images = total_image_urls
+        html_percentage = 0.0  # No HTML percentage for images
+    # Case when the user selects "All"
+    else:
+        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+        total_image_urls = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
+        total_urls_with_images = total_html_documents + total_image_urls
+        html_percentage = (total_html_documents / total_urls_with_images) * 100 if total_urls_with_images > 0 else 0.0
 
-    # Calculate the total URLs including images
-    total_urls_with_images = st.session_state.get('total_urls_with_images', 0)
+    # Recalculate the duplicates based on the filtered data
+    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered)
 
     # Display metrics in a row
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label="Total URLs in Sitemap (including images)", value=total_urls_with_images)
+    col1.metric(label=f"Total URLs ({file_type_filter})", value=total_urls_with_images)
     col2.metric(label="Total nested Sitemaps", value=nested_sitemaps_count)
-    col3.metric(label="Total duplicate URLs and images found", value=st.session_state['total_duplicates'])
+    col3.metric(label="Total duplicate URLs and images found", value=total_duplicates)
     col4.metric(label="Percentage of HTML documents", value=f"{html_percentage:.2f}%")
 
 # Main function to generate report from sitemap URL
@@ -153,21 +168,11 @@ def generate_report(sitemap_url):
         st.session_state['df'] = df
         st.session_state['nested_sitemaps_count'] = nested_sitemaps_count
 
-        # Find duplicate URLs and images
-        duplicate_urls, duplicate_images, total_duplicate_urls_and_images = find_duplicates(df)
-        st.session_state['total_duplicates'] = total_duplicate_urls_and_images
-
-        # Store duplicates in session state
-        st.session_state['duplicate_urls'] = duplicate_urls
-        st.session_state['duplicate_images'] = duplicate_images
-
-        # Count the total URLs, including images
-        total_urls_with_images = len(df) + df['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
-        st.session_state['total_urls_with_images'] = total_urls_with_images
-
-# Sidebar filter for first subfolder
+# Sidebar filter for first subfolder and file type (HTML or image)
 def apply_filters():
     df = st.session_state['df']
+    
+    # Filter by first folder
     first_folder_filter = st.sidebar.selectbox(
         'Filter by First Folder',
         options=['All'] + df['first_subfolder'].unique().tolist(),
@@ -175,7 +180,19 @@ def apply_filters():
     )
     if first_folder_filter != 'All':
         df = df[df['first_subfolder'] == first_folder_filter]
-    return df
+    
+    # Filter by file type (HTML or images)
+    file_type_filter = st.sidebar.selectbox(
+        'Filter by File Type',
+        options=['All', 'HTML', 'Images'],
+        index=0
+    )
+    if file_type_filter == 'HTML':
+        df = df[df['file_extension'] == 'html']
+    elif file_type_filter == 'Images':
+        df = df[df['images'].notna() & (df['images'] != '')]
+
+    return df, file_type_filter
 
 # Streamlit input field and button outside generate_report
 sitemap_url = st.text_input('Enter Sitemap URL', '')
@@ -189,10 +206,10 @@ if st.button('Generate Report'):
 
 # If the report has been generated, display the filtered results and metrics
 if 'df' in st.session_state:
-    df_filtered = apply_filters()
+    df_filtered, file_type_filter = apply_filters()
 
-    # Display the metrics only once after filtering
-    display_metrics(df_filtered, st.session_state['nested_sitemaps_count'])
+    # Display the metrics after filtering
+    display_metrics(df_filtered, st.session_state['nested_sitemaps_count'], file_type_filter)
 
     # Check if there are any valid lastmod values before displaying the "URLs per Year" table
     if df_filtered['lastmod'].notna().sum() > 0:
@@ -247,19 +264,19 @@ if 'df' in st.session_state:
     st.dataframe(full_info_table)
 
     # Check for duplicates and display duplicate URLs and images tables
-    if st.session_state['total_duplicates'] > 0 or not st.session_state['duplicate_images'].empty:
+    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered)
+    
+    if total_duplicates > 0 or not duplicate_images.empty:
         st.write("Duplicate URLs and Images Found:")
 
         # Display duplicate URLs
-        if st.session_state['total_duplicates'] > 0:
+        if not duplicate_urls.empty:
             st.write("Duplicate URLs:")
-            duplicate_urls = st.session_state['duplicate_urls']
             st.dataframe(duplicate_urls[['url']])
 
         # Display duplicate images
-        if not st.session_state['duplicate_images'].empty:
+        if not duplicate_images.empty:
             st.write("Duplicate Images:")
-            duplicate_images = st.session_state['duplicate_images']
             st.dataframe(duplicate_images[['images']])
     else:
         st.success("No duplicate URLs or images found.")
