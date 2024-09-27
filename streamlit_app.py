@@ -115,31 +115,26 @@ def find_duplicates(df):
 
 # Function to display the metrics, dynamically adjusted based on filtered data
 def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
-    total_urls = len(df_filtered)
-    
-    # Case when the user selects "HTML"
+    # Calculate the total URLs, total images, and total HTML documents based on filters
     if file_type_filter == 'HTML':
-        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
-        total_urls_with_images = total_html_documents
-        html_percentage = 100.0 if total_html_documents > 0 else 0.0
-    # Case when the user selects "Images"
+        total_urls = len(df_filtered[df_filtered['file_extension'] == 'html'])
+        total_images = 0
+        html_percentage = 100.0 if total_urls > 0 else 0.0
     elif file_type_filter == 'Images':
-        total_image_urls = len(df_filtered[df_filtered['images'].notna() & (df_filtered['images'] != '')])
-        total_urls_with_images = total_image_urls
+        total_urls = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
         html_percentage = 0.0  # No HTML percentage for images
-    # Case when the user selects "All"
-    else:
+    else:  # file_type_filter == 'All'
+        total_urls = len(df_filtered)
+        total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
         total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
-        total_image_urls = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
-        total_urls_with_images = total_html_documents + total_image_urls
-        html_percentage = (total_html_documents / total_urls_with_images) * 100 if total_urls_with_images > 0 else 0.0
+        html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
 
     # Recalculate the duplicates based on the filtered data
     duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered)
 
     # Display metrics in a row
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric(label=f"Total URLs ({file_type_filter})", value=total_urls_with_images)
+    col1.metric(label=f"Total URLs ({file_type_filter})", value=total_urls)
     col2.metric(label="Total nested Sitemaps", value=nested_sitemaps_count)
     col3.metric(label="Total duplicate URLs and images found", value=total_duplicates)
     col4.metric(label="Percentage of HTML documents", value=f"{html_percentage:.2f}%")
