@@ -98,20 +98,29 @@ def extract_url_info(df):
 
     return df
 
-# Function to find and list duplicate URLs and images
-def find_duplicates(df):
-    # Find duplicate URLs
-    duplicate_urls = df[df.duplicated(['url'], keep=False)].sort_values(by=['url'])
+# Function to find and list duplicate URLs and images based on the filter
+def find_duplicates(df, file_type_filter):
+    if file_type_filter == 'HTML':
+        # Find duplicate URLs that are .html files
+        duplicate_urls = df[df['file_extension'] == 'html']
+        duplicate_urls = duplicate_urls[duplicate_urls.duplicated(['url'], keep=False)].sort_values(by=['url'])
+        duplicate_images = pd.DataFrame()  # No image duplicates for HTML filter
+    elif file_type_filter == 'Images':
+        # Find duplicate images
+        all_images = df.explode('images')  # Split the images column into individual rows
+        valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
+        duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
+        duplicate_urls = pd.DataFrame()  # No URL duplicates for Images filter
+    else:  # file_type_filter == 'All'
+        # Find duplicate URLs
+        duplicate_urls = df[df.duplicated(['url'], keep=False)].sort_values(by=['url'])
+        # Find duplicate images
+        all_images = df.explode('images')  # Ensure all images are considered
+        valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
+        duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
 
-    # Find duplicate images (images column contains a comma-separated list of images)
-    all_images = df.explode('images')  # Split the images column into individual rows
-    # Ignore "No images" and empty images
-    valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
-    duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
-
-    total_duplicate_urls_and_images = len(duplicate_urls) + len(duplicate_images)
-    
-    return duplicate_urls, duplicate_images, total_duplicate_urls_and_images
+    total_duplicates = len(duplicate_urls) + len(duplicate_images)
+    return duplicate_urls, duplicate_images, total_duplicates
 
 # Function to display the metrics, dynamically adjusted based on filtered data
 def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
@@ -132,7 +141,7 @@ def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
         html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
 
     # Recalculate the duplicates based on the filtered data
-    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered)
+    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered, file_type_filter)
 
     # Display metrics in a row
     col1, col2, col3, col4 = st.columns(4)
@@ -261,7 +270,7 @@ if 'df' in st.session_state:
     st.dataframe(full_info_table)
 
     # Check for duplicates and display duplicate URLs and images tables
-    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered)
+    duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered, file_type_filter)
     
     if total_duplicates > 0 or not duplicate_images.empty:
         st.write("Duplicate URLs and Images Found:")
