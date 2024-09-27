@@ -124,34 +124,26 @@ def find_duplicates(df, file_type_filter):
 
 # Function to display the metrics, dynamically adjusted based on filtered data
 def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
-    total_urls = len(df_filtered)  # Total URLs in the filtered data
+    # Calculate total numbers for all metrics
+    total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+    total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
+    total_combined = total_html_documents + total_images  # Total for "All"
 
+    # Determine which metrics to show based on filter type
     if file_type_filter == 'HTML':
-        # Count only URLs with .html file extension
-        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
-        percentage_html = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
-        total_images = 0
+        percentage_html = (total_html_documents / total_combined) * 100 if total_combined > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total HTML URLs", value=total_html_documents)
         col4.metric(label="Percentage of HTML documents", value=f"{percentage_html:.2f}%")
     elif file_type_filter == 'Images':
-        # Count total number of images in all URLs
-        total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
-        percentage_images = (total_images / total_urls) * 100 if total_urls > 0 else 0.0
+        percentage_images = (total_images / total_combined) * 100 if total_combined > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total Images", value=total_images)
         col4.metric(label="Percentage of Images", value=f"{percentage_images:.2f}%")
     else:  # file_type_filter == 'All'
-        # Count all .html URLs and total images combined
-        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
-        total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
-        total_combined = total_html_documents + total_images
-        percentage_html = (total_html_documents / total_combined) * 100 if total_combined > 0 else 0.0
-        percentage_images = (total_images / total_combined) * 100 if total_combined > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total URLs (HTML + Images)", value=total_combined)
-        col4.metric(label="Percentage of HTML documents", value=f"{percentage_html:.2f}%")
-        col4.metric(label="Percentage of Images", value=f"{percentage_images:.2f}%")
+        col4.metric(label="Percentage of All", value="100%")
 
     # Recalculate the duplicates based on the filtered data
     duplicate_urls, duplicate_images, total_duplicates = find_duplicates(df_filtered, file_type_filter)
