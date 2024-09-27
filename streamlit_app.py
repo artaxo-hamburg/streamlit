@@ -115,18 +115,20 @@ def find_duplicates(df):
 
 # Function to display the metrics, dynamically adjusted based on filtered data
 def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
-    # Calculate the total URLs, total images, and total HTML documents based on filters
     if file_type_filter == 'HTML':
+        # Count only URLs with .html file extension
         total_urls = len(df_filtered[df_filtered['file_extension'] == 'html'])
         total_images = 0
         html_percentage = 100.0 if total_urls > 0 else 0.0
     elif file_type_filter == 'Images':
+        # Count total number of images in all URLs
         total_urls = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
         html_percentage = 0.0  # No HTML percentage for images
     else:  # file_type_filter == 'All'
-        total_urls = len(df_filtered)
-        total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
+        # Count all .html URLs and total images combined
         total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+        total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
+        total_urls = total_html_documents + total_images
         html_percentage = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
 
     # Recalculate the duplicates based on the filtered data
