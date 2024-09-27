@@ -147,7 +147,7 @@ def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
     col1, col2, col3, col4 = st.columns(4)
     col1.metric(label=f"Total URLs ({file_type_filter})", value=total_urls)
     col2.metric(label="Total nested Sitemaps", value=nested_sitemaps_count)
-    col3.metric(label="Total duplicate URLs and images found", value=total_duplicates)
+    col3.metric(label="Total duplicate", value=total_duplicates)
     col4.metric(label="Percentage of HTML documents", value=f"{html_percentage:.2f}%")
 
 # Main function to generate report from sitemap URL
