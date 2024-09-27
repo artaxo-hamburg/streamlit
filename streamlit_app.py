@@ -66,6 +66,14 @@ def extract_url_info(df):
     # Extract file extension (if missing, consider as 'html')
     df['file_extension'] = df['url'].apply(lambda x: os.path.splitext(urlparse(x).path)[1][1:] if os.path.splitext(urlparse(x).path)[1] else 'html')
 
+    # Extract image file extensions
+    def get_image_extensions(images):
+        if images:
+            return [os.path.splitext(urlparse(img).path)[1][1:] for img in images]
+        return []
+    
+    df['image_extensions'] = df['images'].apply(get_image_extensions)
+
     # Handle first subfolder
     def get_first_subfolder(url):
         split_url = urlparse(url).path.strip('/').split('/')
@@ -256,7 +264,13 @@ if 'df' in st.session_state:
 
     # Display URLs per file extension table
     st.write("\nURLs per File Extension:")
-    file_extension_data = df_filtered.groupby('file_extension').size().reset_index(name='URL Count').sort_values(by='URL Count', ascending=False)
+    if file_type_filter == 'Images':
+        # Flatten the image extensions list for counting
+        image_extensions = df_filtered['image_extensions'].explode()
+        file_extension_data = image_extensions.value_counts().reset_index(name='Count').rename(columns={'index': 'File Extension'})
+    else:
+        file_extension_data = df_filtered.groupby('file_extension').size().reset_index(name='URL Count').sort_values(by='URL Count', ascending=False)
+    
     st.dataframe(file_extension_data)
 
     # Display URLs per domain table
