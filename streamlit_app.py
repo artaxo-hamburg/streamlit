@@ -108,17 +108,25 @@ def extract_url_info(df):
 
 # Function to find and list duplicate URLs and images based on the filter
 def find_duplicates(df, file_type_filter):
-    if file_type_filter == 'HTML':
+    if 'HTML' in file_type_filter and 'Images' not in file_type_filter:
         # Find duplicate URLs that are .html files
         duplicate_urls = df[df['file_extension'] == 'html']
         duplicate_urls = duplicate_urls[duplicate_urls.duplicated(['url'], keep=False)].sort_values(by=['url'])
         duplicate_images = pd.DataFrame()  # No image duplicates for HTML filter
-    elif file_type_filter == 'Images':
+    elif 'Images' in file_type_filter and 'HTML' not in file_type_filter:
         # Find duplicate images
         all_images = df.explode('images')  # Split the images column into individual rows
         valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
         duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
         duplicate_urls = pd.DataFrame()  # No URL duplicates for Images filter
+    elif 'HTML' in file_type_filter and 'Images' in file_type_filter:
+        # Include both HTML URLs and those with images
+        duplicate_urls = df[(df['file_extension'] == 'html') | (df['images'].notna() & (df['images'] != ''))]
+        duplicate_urls = duplicate_urls[duplicate_urls.duplicated(['url'], keep=False)].sort_values(by=['url'])
+        
+        all_images = df.explode('images')  # Ensure all images are considered
+        valid_images = all_images[all_images['images'].notna() & (all_images['images'] != '')]
+        duplicate_images = valid_images[valid_images.duplicated(['images'], keep=False)].sort_values(by=['images'])
     else:  # file_type_filter == 'All'
         # Find duplicate URLs
         duplicate_urls = df[df.duplicated(['url'], keep=False)].sort_values(by=['url'])
@@ -138,18 +146,18 @@ def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
     total_combined = total_urls + total_images  # Total for "All"
 
     # Determine which metrics to show based on filter type
-    if file_type_filter == 'HTML':
+    if 'HTML' in file_type_filter and 'Images' not in file_type_filter:
         total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
         percentage_html = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total HTML URLs", value=total_html_documents)
         col4.metric(label="Percentage of HTML documents", value=f"{percentage_html:.2f}%")
-    elif file_type_filter == 'Images':
+    elif 'Images' in file_type_filter and 'HTML' not in file_type_filter:
         percentage_images = (total_images / total_combined) * 100 if total_combined > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total Images", value=total_images)
         col4.metric(label="Percentage of Images", value=f"{percentage_images:.2f}%")
-    else:  # file_type_filter == 'All'
+    else:  # file_type_filter includes both 'HTML' and 'Images'
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total URLs (All Types)", value=total_combined)  # Count all URLs + images
         col4.metric(label="Percentage of All", value="100%")
@@ -189,26 +197,34 @@ def generate_report(sitemap_url):
 def apply_filters():
     df = st.session_state['df']
     
-    # Filter by first folder
-    first_folder_filter = st.sidebar.selectbox(
+    # Filter by first folder using multiselect
+    first_folder_filter = st.sidebar.multiselect(
         'Filter by First Folder',
         options=['All'] + df['first_subfolder'].unique().tolist(),
-        index=0
+        default=['All']
     )
-    if first_folder_filter != 'All':
-        df = df[df['first_subfolder'] == first_folder_filter]
     
-    # Filter by file type (HTML or images)
-    file_type_filter = st.sidebar.selectbox(
+    # Apply filtering logic
+    if 'All' not in first_folder_filter:
+        df = df[df['first_subfolder'].isin(first_folder_filter)]
+    
+    # Filter by file type (HTML or images) using multiselect
+    file_type_filter = st.sidebar.multiselect(
         'Filter by File Type',
         options=['All', 'HTML', 'Images'],
-        index=0
+        default=['All']
     )
-    if file_type_filter == 'HTML':
-        df = df[df['file_extension'] == 'html']  # Filter for URLs with .html extension
-    elif file_type_filter == 'Images':
-        df = df[df['images'].notna() & (df['images'] != '')]
-
+    
+    # Apply file type filtering logic
+    if 'All' not in file_type_filter:
+        if 'HTML' in file_type_filter and 'Images' not in file_type_filter:
+            df = df[df['file_extension'] == 'html']
+        elif 'Images' in file_type_filter and 'HTML' not in file_type_filter:
+            df = df[df['images'].notna() & (df['images'] != '')]
+        elif 'HTML' in file_type_filter and 'Images' in file_type_filter:
+            # Include both HTML URLs and those with images
+            df = df[(df['file_extension'] == 'html') | (df['images'].notna() & (df['images'] != ''))]
+    
     return df, file_type_filter
 
 # Streamlit input field and button outside generate_report
@@ -265,13 +281,23 @@ if 'df' in st.session_state:
 
     # Display URLs per file extension table
     st.write("\nURLs per File Extension:")
-    if file_type_filter == 'Images':
-        # Flatten the image extensions list for counting
+
+    # Flatten the image extensions list and append to the URLs for counting if both are selected
+    if 'Images' in file_type_filter and 'HTML' in file_type_filter:
         image_extensions = df_filtered['image_extensions'].explode()
-        file_extension_data = image_extensions.value_counts().reset_index(name='Count').rename(columns={'index': 'File Extension'})
+        all_file_extensions = pd.concat([
+            df_filtered['file_extension'], 
+            image_extensions
+        ])
+    elif 'Images' in file_type_filter and 'HTML' not in file_type_filter:
+        # Show only image extensions
+        all_file_extensions = df_filtered['image_extensions'].explode()
     else:
-        file_extension_data = df_filtered.groupby('file_extension').size().reset_index(name='URL Count').sort_values(by='URL Count', ascending=False)
-    
+        # Show only URL file extensions
+        all_file_extensions = df_filtered['file_extension']
+
+    # Aggregate file extensions
+    file_extension_data = all_file_extensions.value_counts().reset_index(name='Count').rename(columns={'index': 'File Extension'})
     st.dataframe(file_extension_data)
 
     # Display URLs per domain table
