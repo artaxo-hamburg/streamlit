@@ -133,13 +133,14 @@ def find_duplicates(df, file_type_filter):
 # Function to display the metrics, dynamically adjusted based on filtered data
 def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
     # Calculate total numbers for all metrics
-    total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+    total_urls = len(df_filtered)  # Count all URLs
     total_images = df_filtered['images'].apply(lambda x: len(x.split(', ')) if x else 0).sum()
-    total_combined = total_html_documents + total_images  # Total for "All"
+    total_combined = total_urls + total_images  # Total for "All"
 
     # Determine which metrics to show based on filter type
     if file_type_filter == 'HTML':
-        percentage_html = (total_html_documents / total_combined) * 100 if total_combined > 0 else 0.0
+        total_html_documents = len(df_filtered[df_filtered['file_extension'] == 'html'])
+        percentage_html = (total_html_documents / total_urls) * 100 if total_urls > 0 else 0.0
         col1, col2, col3, col4 = st.columns(4)
         col1.metric(label="Total HTML URLs", value=total_html_documents)
         col4.metric(label="Percentage of HTML documents", value=f"{percentage_html:.2f}%")
@@ -150,7 +151,7 @@ def display_metrics(df_filtered, nested_sitemaps_count, file_type_filter):
         col4.metric(label="Percentage of Images", value=f"{percentage_images:.2f}%")
     else:  # file_type_filter == 'All'
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric(label="Total URLs (HTML + Images)", value=total_combined)
+        col1.metric(label="Total URLs (All Types)", value=total_combined)  # Count all URLs + images
         col4.metric(label="Percentage of All", value="100%")
 
     # Recalculate the duplicates based on the filtered data
@@ -204,7 +205,7 @@ def apply_filters():
         index=0
     )
     if file_type_filter == 'HTML':
-        df = df[df['file_extension'] == 'html']
+        df = df[df['file_extension'] == 'html']  # Filter for URLs with .html extension
     elif file_type_filter == 'Images':
         df = df[df['images'].notna() & (df['images'] != '')]
 
