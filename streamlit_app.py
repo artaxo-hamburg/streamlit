@@ -224,7 +224,7 @@ def apply_filters():
         elif 'HTML' in file_type_filter and 'Images' in file_type_filter:
             # Include both HTML URLs and those with images
             df = df[(df['file_extension'] == 'html') | (df['images'].notna() & (df['images'] != ''))]
-    
+
     return df, file_type_filter
 
 # Streamlit input field and button outside generate_report
@@ -282,8 +282,8 @@ if 'df' in st.session_state:
     # Display URLs per file extension table
     st.write("\nURLs per File Extension:")
 
-    # Flatten the image extensions list and append to the URLs for counting if both are selected
-    if 'Images' in file_type_filter and 'HTML' in file_type_filter:
+    # Flatten the image extensions list and append to the URLs for counting if 'All' is selected
+    if 'All' in file_type_filter or ('Images' in file_type_filter and 'HTML' in file_type_filter):
         image_extensions = df_filtered['image_extensions'].explode()
         all_file_extensions = pd.concat([
             df_filtered['file_extension'], 
