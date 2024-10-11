@@ -204,7 +204,7 @@ def apply_filters():
         default=['All']
     )
     
-    # Apply filtering logic
+    # Apply filtering logic for first folder
     if 'All' not in first_folder_filter:
         df = df[df['first_subfolder'].isin(first_folder_filter)]
     
@@ -214,7 +214,15 @@ def apply_filters():
         options=['All', 'HTML', 'Images'],
         default=['All']
     )
-    
+
+    # Ensure that "All" cannot be selected together with "HTML" or "Images"
+    if 'All' in file_type_filter and ('HTML' in file_type_filter or 'Images' in file_type_filter):
+        file_type_filter = ['All']  # Reset to "All" if conflicting options are selected
+        st.sidebar.warning("You can only select 'All' or a combination of 'HTML' and 'Images', but not both.")
+    elif 'HTML' in file_type_filter or 'Images' in file_type_filter:
+        # If either 'HTML' or 'Images' are selected, remove 'All' from selection
+        file_type_filter = [option for option in file_type_filter if option != 'All']
+
     # Apply file type filtering logic
     if 'All' not in file_type_filter:
         if 'HTML' in file_type_filter and 'Images' not in file_type_filter:
@@ -285,10 +293,7 @@ if 'df' in st.session_state:
     # Flatten the image extensions list and append to the URLs for counting if 'All' is selected
     if 'All' in file_type_filter or ('Images' in file_type_filter and 'HTML' in file_type_filter):
         image_extensions = df_filtered['image_extensions'].explode()
-        all_file_extensions = pd.concat([
-            df_filtered['file_extension'], 
-            image_extensions
-        ])
+        all_file_extensions = pd.concat([df_filtered['file_extension'], image_extensions])
     elif 'Images' in file_type_filter and 'HTML' not in file_type_filter:
         # Show only image extensions
         all_file_extensions = df_filtered['image_extensions'].explode()
@@ -308,8 +313,6 @@ if 'df' in st.session_state:
     # Display full URL info table including images
     st.write("\nFull URL Info Table (URL, Last mod, First folder, Second folder, Images):")
     full_info_table = df_filtered[['url', 'lastmod', 'first_subfolder', 'second_subfolder', 'images']].sort_values(by=['url'])
-
-    # Use Streamlit's table display with images
     st.dataframe(full_info_table)
 
     # Check for duplicates and display duplicate URLs and images tables
